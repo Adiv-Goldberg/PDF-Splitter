@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Splitter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* Custom scrollbar for output log */
+        #log-area::-webkit-scrollbar {
+            width: 8px;
+        }
+        #log-area::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+            border-radius: 4px;
+        }
+        #log-area::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        #log-area::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+    </style>
+</head>
+<body class="text-gray-800 min-h-screen flex flex-col items-center py-10 px-4 sm:px-6 lg:px-8">
+
+    <div class="max-w-2xl w-full bg-white rounded-2xl shadow-xl overflow-hidden">
+        
+        <!-- Header -->
+        <div class="bg-blue-600 px-6 py-8 text-center">
+            <h1 class="text-3xl font-bold text-white mb-2 flex justify-center items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                PDF Splitter
+            </h1>
+            <p class="text-blue-100 text-sm">Split your PDF files locally in your browser. Fast, secure, and private.</p>
+        </div>
+
+        <div class="p-6 md:p-8 space-y-8">
+            
+            <!-- Section 1: File Upload -->
+            <div class="space-y-4">
+                <h2 class="text-lg font-semibold text-gray-700 flex items-center gap-2">
+                    <span class="bg-blue-100 text-blue-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">1</span>
+                    Select PDF File(s)
+                </h2>
+                
+                <div class="flex items-center justify-center w-full">
+                    <label for="dropzone-file" class="flex flex-col items-center justify-center w-full h-40 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors" id="drop-area">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
+                            <svg aria-hidden="true" class="w-10 h-10 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                            <p class="mb-2 text-sm text-gray-500"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+                            <p class="text-xs text-gray-500">Multiple PDF files will be merged before splitting.</p>
+                            <p id="file-name-display" class="mt-3 text-sm font-medium text-blue-600 hidden break-all"></p>
+                            <p id="file-size-display" class="text-xs text-gray-400 hidden"></p>
+                        </div>
+                        <input id="dropzone-file" type="file" class="hidden" accept="application/pdf" multiple />
+                    </label>
+                </div>
+            </div>
+
+            <!-- Section 2: Split Options -->
+            <div class="space-y-4 opacity-50 pointer-events-none transition-opacity duration-300" id="options-section">
+                <h2 class="text-lg font-semibold text-gray-700 flex items-center gap-2">
+                    <span class="bg-blue-100 text-blue-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">2</span>
+                    Choose Split Method
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Option A: By Number of Files -->
+                    <div class="border rounded-xl p-4 bg-white relative cursor-pointer hover:border-blue-400 transition-colors" id="card-by-number" onclick="selectMethod('number')">
+                        <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input id="method-number" name="split-method" type="radio" value="number" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500" checked>
+                            </div>
+                            <div class="ml-3 text-sm">
+                                <label for="method-number" class="font-medium text-gray-900 cursor-pointer">Split by Number of Files</label>
+                                <p id="helper-radio-text" class="text-xs font-normal text-gray-500 mt-1">Divide the PDF into a specific number of equal parts.</p>
+                            </div>
+                        </div>
+                        <div class="mt-4 pl-7">
+                            <label for="num-files-input" class="block text-xs font-medium text-gray-700 mb-1">Number of resulting PDFs:</label>
+                            <input type="number" id="num-files-input" min="2" value="2" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                            <p id="num-files-hint" class="text-xs text-gray-500 mt-1 h-4"></p>
+                        </div>
+                    </div>
+
+                    <!-- Option B: By Max File Size -->
+                    <div class="border rounded-xl p-4 bg-white relative cursor-pointer hover:border-blue-400 transition-colors" id="card-by-size" onclick="selectMethod('size')">
+                        <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input id="method-size" name="split-method" type="radio" value="size" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500">
+                            </div>
+                            <div class="ml-3 text-sm w-full">
+                                <label for="method-size" class="font-medium text-gray-900 cursor-pointer">Split by Max File Size</label>
+                                <p id="helper-radio-text-2" class="text-xs font-normal text-gray-500 mt-1">Create files up to a maximum size (MB) limit.</p>
+                                
+                                <div class="mt-4 opacity-50 pointer-events-none transition-opacity flex flex-col gap-3" id="size-input-container">
+                                    <div>
+                                        <label for="max-size-input" class="block text-xs font-medium text-gray-700 mb-1">Max size per PDF (MB):</label>
+                                        <div class="relative">
+                                            <input type="number" id="max-size-input" min="0.1" step="0.1" value="5" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                                            <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                                <span class="text-gray-500 sm:text-sm">MB</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="space-y-2 mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200" onclick="event.stopPropagation()">
+                                        <label class="block text-xs font-semibold text-gray-700 mb-1">Processing Mode:</label>
+                                        <div class="flex items-center">
+                                            <input id="mode-fast" type="radio" value="fast" name="size-mode" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500">
+                                            <label for="mode-fast" class="ml-2 text-xs font-medium text-gray-900 cursor-pointer">
+                                                Approximate Split (Fast)
+                                            </label>
+                                        </div>
+                                        <p class="ml-6 text-[10px] text-gray-500 leading-tight mb-2">Uses average page size estimation. Files may slightly exceed the target limit.</p>
+                                        
+                                        <div class="flex items-center">
+                                            <input id="mode-strict" type="radio" value="strict" name="size-mode" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500" checked>
+                                            <label for="mode-strict" class="ml-2 text-xs font-medium text-gray-900 cursor-pointer">
+                                                Strict Max Limit (Slower)
+                                            </label>
+                                        </div>
+                                        <p class="ml-6 text-[10px] text-gray-500 leading-tight">Guarantees no file exceeds the limit by saving incrementally to check size.</p>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 3: Action & Output -->
+            <div class="space-y-4 pt-4 border-t border-gray-100">
+                <button id="process-btn" disabled class="w-full text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-lg px-5 py-3.5 text-center disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex justify-center items-center gap-2">
+                    <span>Split PDF</span>
+                    <svg id="spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+
+                <!-- Status and Progress -->
+                <div id="status-container" class="hidden space-y-2">
+                    <div class="flex justify-between text-sm font-medium text-gray-700">
+                        <span id="status-text">Processing...</span>
+                        <span id="status-percentage">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+                    </div>
+                    
+                    <!-- Log Area -->
+                    <div id="log-area" class="mt-4 bg-gray-900 text-green-400 p-3 rounded-lg text-xs font-mono h-32 overflow-y-auto break-all shadow-inner">
+                        <!-- Logs will appear here -->
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        
+        <!-- Footer -->
+        <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 text-center text-xs text-gray-500">
+            Files are processed entirely in your browser. No data is uploaded to any server.
+        </div>
+    </div>
+
+    <script>
+        // State variables
+        let selectedFiles = [];
+        let combinedPdfDoc = null;
+        let pdfBytes = null;
+        let totalPages = 0;
+        let originalFileName = "";
+        let originalFileSize = 0;
+
+        // DOM Elements
+        const fileInput = document.getElementById('dropzone-file');
+        const dropArea = document.getElementById('drop-area');
+        const fileNameDisplay = document.getElementById('file-name-display');
+        const fileSizeDisplay = document.getElementById('file-size-display');
+        
+        const optionsSection = document.getElementById('options-section');
+        const methodRadios = document.getElementsByName('split-method');
+        const cardByNumber = document.getElementById('card-by-number');
+        const cardBySize = document.getElementById('card-by-size');
+        
+        const numFilesInput = document.getElementById('num-files-input');
+        const numFilesHint = document.getElementById('num-files-hint');
+        const sizeInputContainer = document.getElementById('size-input-container');
+        const maxSizeInput = document.getElementById('max-size-input');
+        
+        const processBtn = document.getElementById('process-btn');
+        const spinner = document.getElementById('spinner');
+        
+        const statusContainer = document.getElementById('status-container');
+        const statusText = document.getElementById('status-text');
+        const statusPercentage = document.getElementById('status-percentage');
+        const progressBar = document.getElementById('progress-bar');
+        const logArea = document.getElementById('log-area');
+
+        // Helper to format bytes
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        // Logging helper
+        function log(message, isError = false) {
+            const time = new Date().toLocaleTimeString([], { hour12: false });
+            const p = document.createElement('p');
+            p.className = isError ? 'text-red-400' : 'mb-1';
+            p.innerHTML = `<span class="text-gray-500">[${time}]</span> ${message}`;
+            logArea.appendChild(p);
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        // Select Split Method UI Handler
+        window.selectMethod = function(method) {
+            // Prevent interaction if disabled
+            if (optionsSection.classList.contains('pointer-events-none') && !selectedFiles.length) return;
+
+            if(method === 'number') {
+                document.getElementById('method-number').checked = true;
+                cardByNumber.classList.add('border-blue-500', 'ring-1', 'ring-blue-500');
+                cardBySize.classList.remove('border-blue-500', 'ring-1', 'ring-blue-500');
+                
+                numFilesInput.parentElement.classList.remove('opacity-50', 'pointer-events-none');
+                sizeInputContainer.classList.add('opacity-50', 'pointer-events-none');
+            } else {
+                document.getElementById('method-size').checked = true;
+                cardBySize.classList.add('border-blue-500', 'ring-1', 'ring-blue-500');
+                cardByNumber.classList.remove('border-blue-500', 'ring-1', 'ring-blue-500');
+                
+                sizeInputContainer.classList.remove('opacity-50', 'pointer-events-none');
+                numFilesInput.parentElement.classList.add('opacity-50', 'pointer-events-none');
+            }
+            updateHints();
+        }
+
+        // Update hints based on inputs
+        function updateHints() {
+            if (!combinedPdfDoc || totalPages === 0) return;
+            
+            const numMethod = document.getElementById('method-number').checked;
+            if (numMethod) {
+                let parts = parseInt(numFilesInput.value);
+                if (isNaN(parts) || parts < 2) parts = 2;
+                
+                if (parts > totalPages) {
+                    numFilesHint.textContent = `Warning: PDF only has ${totalPages} pages. Will split into ${totalPages} single-page files.`;
+                    numFilesHint.classList.add('text-yellow-600');
+                } else {
+                    const pagesPerPart = Math.floor(totalPages / parts);
+                    const remainder = totalPages % parts;
+                    numFilesHint.textContent = `Approx. ${pagesPerPart} - ${pagesPerPart + (remainder > 0 ? 1 : 0)} pages per file.`;
+                    numFilesHint.classList.remove('text-yellow-600');
+                }
+            }
+        }
+
+        // Event listeners for inputs
+        numFilesInput.addEventListener('input', updateHints);
+        Array.from(methodRadios).forEach(radio => {
+            radio.addEventListener('change', (e) => selectMethod(e.target.value));
+        });
+
+        // Initialize UI selection
+        selectMethod('number');
+
+        // Handle file selection
+        async function handleFiles(files) {
+            if (!files || files.length === 0) return;
+            
+            const validFiles = Array.from(files).filter(f => f.type === 'application/pdf');
+            if (validFiles.length === 0) {
+                alert('Please select valid PDF files.');
+                return;
+            }
+
+            selectedFiles = validFiles;
+            originalFileName = validFiles.length === 1 
+                ? validFiles[0].name.replace(/\.[^/.]+$/, "") 
+                : "Merged_Document";
+            originalFileSize = validFiles.reduce((acc, file) => acc + file.size, 0);
+            
+            // Update UI
+            if (validFiles.length === 1) {
+                fileNameDisplay.textContent = validFiles[0].name;
+            } else {
+                fileNameDisplay.textContent = `${validFiles.length} files selected (will merge)`;
+            }
+            fileNameDisplay.classList.remove('hidden');
+            fileSizeDisplay.textContent = `Total: ${formatBytes(originalFileSize)}`;
+            fileSizeDisplay.classList.remove('hidden');
+            
+            dropArea.classList.add('bg-blue-50', 'border-blue-300');
+            
+            optionsSection.classList.remove('opacity-50', 'pointer-events-none');
+            processBtn.disabled = true;
+            spinner.classList.remove('hidden');
+            processBtn.querySelector('span').textContent = validFiles.length > 1 ? "Merging PDFs..." : "Loading PDF...";
+            
+            statusContainer.classList.remove('hidden');
+            logArea.innerHTML = '';
+            
+            await loadPdfInfo();
+            spinner.classList.add('hidden');
+        }
+
+        async function loadPdfInfo() {
+            try {
+                updateProgress(10, "Loading PDF data...");
+                log(`Preparing ${selectedFiles.length} file(s)...`);
+
+                combinedPdfDoc = await PDFLib.PDFDocument.create();
+
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    const file = selectedFiles[i];
+                    log(`Reading: ${file.name}`);
+                    const arrayBuffer = await file.arrayBuffer();
+                    const currentDocBytes = new Uint8Array(arrayBuffer);
+                    
+                    const pdfDocToMerge = await PDFLib.PDFDocument.load(currentDocBytes, { ignoreEncryption: true });
+                    
+                    if (pdfDocToMerge.isEncrypted) {
+                       log(`Warning: ${file.name} is encrypted. Modifications might fail.`, true);
+                    }
+
+                    const copiedPages = await combinedPdfDoc.copyPages(pdfDocToMerge, pdfDocToMerge.getPageIndices());
+                    copiedPages.forEach(page => combinedPdfDoc.addPage(page));
+                    
+                    updateProgress(10 + Math.round(((i + 1) / selectedFiles.length) * 40), `Merging file ${i + 1}...`);
+                }
+
+                updateProgress(60, "Finalizing combined document...");
+                log('Generating combined structural representation...');
+                
+                // Save the combined document to bytes so we have a unified source
+                pdfBytes = await combinedPdfDoc.save();
+                
+                // Reload to reset the internal state cleanly for copying later
+                combinedPdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
+                totalPages = combinedPdfDoc.getPageCount();
+
+                log(`Loaded successfully. Total pages: ${totalPages}`);
+                
+                numFilesInput.max = totalPages;
+                updateHints();
+                
+                updateProgress(100, "Ready to split.");
+                setTimeout(() => { statusContainer.classList.add('hidden'); }, 1500);
+
+                processBtn.disabled = false;
+                processBtn.querySelector('span').textContent = "Split PDF";
+                
+            } catch (error) {
+                console.error(error);
+                log(`Error reading PDF: ${error.message}`, true);
+                processBtn.querySelector('span').textContent = "Error Loading PDF";
+                alert('Could not read or merge the PDF files. They might be corrupted or encrypted.');
+            }
+        }
+
+        // Drag and drop setup
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => dropArea.classList.add('bg-gray-200', 'border-blue-500'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => dropArea.classList.remove('bg-gray-200', 'border-blue-500'), false);
+        });
+
+        dropArea.addEventListener('drop', (e) => {
+            let dt = e.dataTransfer;
+            let files = dt.files;
+            handleFiles(files);
+        }, false);
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        async function splitByNumber() {
+            let numParts = parseInt(numFilesInput.value);
+            if (isNaN(numParts) || numParts < 1) numParts = 2;
+            
+            // Cannot have more parts than pages
+            if (numParts > totalPages) numParts = totalPages;
+            
+            log(`Starting split into ${numParts} files...`);
+            
+            const sourcePdf = combinedPdfDoc;
+            const zip = new JSZip();
+            
+            // Calculate ranges
+            const pagesPerPart = Math.floor(totalPages / numParts);
+            let remainder = totalPages % numParts;
+            
+            let startPage = 0;
+            const generatedFiles = [];
+            
+            for (let i = 0; i < numParts; i++) {
+                // Distribute remainder 1 by 1 to the first few parts
+                const currentPartPages = pagesPerPart + (remainder > 0 ? 1 : 0);
+                remainder--;
+                
+                const endPage = startPage + currentPartPages;
+                
+                log(`Creating Part ${i+1}: Pages ${startPage + 1} to ${endPage}`);
+                
+                // Update progress before heavy lifting
+                const progress = Math.round((i / numParts) * 100);
+                updateProgress(progress, `Generating file ${i+1} of ${numParts}...`);
+                
+                // Give UI time to update
+                await new Promise(r => setTimeout(r, 10)); 
+
+                // Create new doc and copy pages
+                const newPdf = await PDFLib.PDFDocument.create();
+                const pageIndices = Array.from({length: endPage - startPage}, (_, idx) => startPage + idx);
+                
+                const copiedPages = await newPdf.copyPages(sourcePdf, pageIndices);
+                copiedPages.forEach(page => newPdf.addPage(page));
+                
+                // Save and add to zip
+                const newPdfBytes = await newPdf.save();
+                const filename = `${originalFileName}_part${i+1}.pdf`;
+                zip.file(filename, newPdfBytes);
+                
+                generatedFiles.push({ name: filename, size: newPdfBytes.length });
+                startPage = endPage;
+            }
+            
+            return { zip, generatedFiles };
+        }
+
+        async function splitBySize() {
+            let maxSizeMB = parseFloat(maxSizeInput.value);
+            if (isNaN(maxSizeMB) || maxSizeMB <= 0) {
+                alert('Please enter a valid max size.');
+                throw new Error("Invalid size input");
+            }
+            
+            const maxSizeBytes = maxSizeMB * 1024 * 1024;
+            const isStrict = document.getElementById('mode-strict').checked;
+            
+            log(`Starting split by size: Max ${maxSizeMB} MB per file.`);
+            log(`Mode: ${isStrict ? 'Strict (Slower)' : 'Approximate (Fast)'}`);
+            
+            const sourcePdf = combinedPdfDoc;
+            const zip = new JSZip();
+            const generatedFiles = [];
+            
+            let currentPartIndex = 1;
+            let startPageIdxForCurrentFile = 0;
+            
+            // Average page size calculation for fast mode
+            const avgPageSizeEst = pdfBytes.length / totalPages;
+
+            for (let i = 0; i < totalPages; i++) {
+                updateProgress(Math.round((i / totalPages) * 100), `Processing page ${i+1} of ${totalPages}...`);
+                await new Promise(r => setTimeout(r, 0)); // yield
+                
+                const pagesInCurrentChunk = (i - startPageIdxForCurrentFile) + 1;
+
+                if (!isStrict) {
+                    // FAST MODE: Estimate based on average size
+                    const estimatedSize = pagesInCurrentChunk * avgPageSizeEst;
+                    
+                    if (estimatedSize > maxSizeBytes && pagesInCurrentChunk > 1) {
+                        log(`Estimated size limit reached. Exporting Part ${currentPartIndex}...`);
+                        
+                        // Save up to previous page
+                        const finalPdf = await PDFLib.PDFDocument.create();
+                        const finalPagesToCopy = Array.from({length: i - startPageIdxForCurrentFile}, (_, idx) => startPageIdxForCurrentFile + idx);
+                        const finalCopied = await finalPdf.copyPages(sourcePdf, finalPagesToCopy);
+                        finalCopied.forEach(p => finalPdf.addPage(p));
+                        const finalBytes = await finalPdf.save();
+                        
+                        const filename = `${originalFileName}_part${currentPartIndex}.pdf`;
+                        zip.file(filename, finalBytes);
+                        generatedFiles.push({ name: filename, size: finalBytes.length });
+                        log(`Created ${filename} (Approx size: ${formatBytes(finalBytes.length)})`);
+                        
+                        currentPartIndex++;
+                        startPageIdxForCurrentFile = i; 
+                        i--; // Re-evaluate this page for the next file
+                    } else if (i === totalPages - 1) {
+                        // Last page
+                        const finalPdf = await PDFLib.PDFDocument.create();
+                        const finalPagesToCopy = Array.from({length: pagesInCurrentChunk}, (_, idx) => startPageIdxForCurrentFile + idx);
+                        const finalCopied = await finalPdf.copyPages(sourcePdf, finalPagesToCopy);
+                        finalCopied.forEach(p => finalPdf.addPage(p));
+                        const finalBytes = await finalPdf.save();
+
+                        const filename = `${originalFileName}_part${currentPartIndex}.pdf`;
+                        zip.file(filename, finalBytes);
+                        generatedFiles.push({ name: filename, size: finalBytes.length });
+                        log(`Created final part ${filename} (${formatBytes(finalBytes.length)})`);
+                    }
+
+                } else {
+                    // STRICT MODE: Serialize and test actual bytes
+                    const testPdf = await PDFLib.PDFDocument.create();
+                    const pagesToCopy = Array.from({length: pagesInCurrentChunk}, (_, idx) => startPageIdxForCurrentFile + idx);
+                    
+                    try {
+                        const copiedPages = await testPdf.copyPages(sourcePdf, pagesToCopy);
+                        copiedPages.forEach(p => testPdf.addPage(p));
+                        const testBytes = await testPdf.save();
+                        
+                        const isOverLimit = testBytes.length > maxSizeBytes;
+                        const isSinglePageFile = pagesToCopy.length === 1;
+
+                        if (isOverLimit && !isSinglePageFile) {
+                            // Current page (i) pushes it over limit. 
+                            // Save previous run (startPageIdxForCurrentFile to i-1)
+                            log(`Strict limit reached before page ${i+1}. Exporting Part ${currentPartIndex}...`);
+                            
+                            // Re-create the good version (up to the previous page)
+                            const finalPdf = await PDFLib.PDFDocument.create();
+                            const finalPagesToCopy = Array.from({length: i - startPageIdxForCurrentFile}, (_, idx) => startPageIdxForCurrentFile + idx);
+                            const finalCopied = await finalPdf.copyPages(sourcePdf, finalPagesToCopy);
+                            finalCopied.forEach(p => finalPdf.addPage(p));
+                            const finalBytes = await finalPdf.save();
+                            
+                            const filename = `${originalFileName}_part${currentPartIndex}.pdf`;
+                            zip.file(filename, finalBytes);
+                            generatedFiles.push({ name: filename, size: finalBytes.length });
+                            log(`Created ${filename} (${formatBytes(finalBytes.length)})`);
+                            
+                            currentPartIndex++;
+                            startPageIdxForCurrentFile = i; // Current page starts the next file
+                            i--; // Re-process this page for the next file
+                        } else if (isOverLimit && isSinglePageFile) {
+                            // A single page is larger than the strict limit.
+                            log(`CRITICAL WARNING: Page ${i+1} alone (${formatBytes(testBytes.length)}) exceeds absolute limit of ${maxSizeMB} MB.`, true);
+                            throw new Error(`Page ${i+1} exceeds strict maximum size limit.`);
+                        } else if (i === totalPages - 1) {
+                            // Last page, under limit. Export.
+                            log(`End of document reached. Exporting final part...`);
+                            const filename = `${originalFileName}_part${currentPartIndex}.pdf`;
+                            zip.file(filename, testBytes);
+                            generatedFiles.push({ name: filename, size: testBytes.length });
+                            log(`Created ${filename} (${formatBytes(testBytes.length)})`);
+                        }
+                    } catch(e) {
+                        console.error("Error during strict size splitting:", e);
+                        if (!e.message.includes("exceeds strict maximum size")) {
+                             log(`Error processing page ${i+1}: ${e.message}`, true);
+                        }
+                        throw e;
+                    }
+                }
+            }
+            
+            return { zip, generatedFiles };
+        }
+
+        function updateProgress(percent, text) {
+            progressBar.style.width = `${percent}%`;
+            statusPercentage.textContent = `${percent}%`;
+            if (text) statusText.textContent = text;
+        }
+
+        processBtn.addEventListener('click', async () => {
+            if (!combinedPdfDoc) return;
+
+            // UI Setup for processing
+            processBtn.disabled = true;
+            spinner.classList.remove('hidden');
+            processBtn.querySelector('span').textContent = "Processing...";
+            optionsSection.classList.add('opacity-50', 'pointer-events-none');
+            dropArea.parentElement.classList.add('opacity-50', 'pointer-events-none');
+            
+            statusContainer.classList.remove('hidden');
+            updateProgress(0, "Starting processing...");
+            
+            const method = document.getElementById('method-number').checked ? 'number' : 'size';
+            
+            try {
+                let result;
+                if (method === 'number') {
+                    result = await splitByNumber();
+                } else {
+                    result = await splitBySize();
+                }
+                
+                const { zip, generatedFiles } = result;
+                
+                updateProgress(90, "Compressing files into ZIP...");
+                log(`Zipping ${generatedFiles.length} files...`);
+                
+                const zipBlob = await zip.generateAsync({ type: "blob", compression: "STORE" }, (metadata) => {
+                    // Update progress during zip generation
+                    const zipProg = 90 + (metadata.percent * 0.1);
+                    updateProgress(Math.round(zipProg), `Compressing: ${Math.round(metadata.percent)}%`);
+                });
+                
+                updateProgress(100, "Done!");
+                log('Processing complete. Triggering download.');
+                
+                // Trigger download
+                const downloadLink = document.createElement("a");
+                downloadLink.href = URL.createObjectURL(zipBlob);
+                downloadLink.download = `${originalFileName}_split.zip`;
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+                
+                // Cleanup URL after a delay
+                setTimeout(() => URL.revokeObjectURL(downloadLink.href), 10000);
+                
+                // Reset UI slightly to allow another operation
+                processBtn.querySelector('span').textContent = "Split Complete (Run Again)";
+                
+            } catch (error) {
+                console.error(error);
+                log(`Failed: ${error.message}`, true);
+                updateProgress(0, "Error occurred.");
+                progressBar.classList.add('bg-red-500');
+                progressBar.classList.remove('bg-blue-600');
+                processBtn.querySelector('span').textContent = "Try Again";
+            } finally {
+                spinner.classList.add('hidden');
+                processBtn.disabled = false;
+                optionsSection.classList.remove('opacity-50', 'pointer-events-none');
+                dropArea.parentElement.classList.remove('opacity-50', 'pointer-events-none');
+            }
+        });
+
+    </script>
+</body>
+</html>
